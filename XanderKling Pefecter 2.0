@@ -1,0 +1,258 @@
+import streamlit as st
+import re
+import json
+
+st.set_page_config(page_title="Kling Prompt Perfecter", layout="wide")
+
+st.title("🎨 Kling Prompt Perfecter")
+st.write("Refine and structure your story prompts into rich, Kling-friendly image generation inputs.")
+
+# -----------------------------
+# STORY PACKS
+# -----------------------------
+STORY_PACKS = {
+    "General (Default)": {
+        "CHAR_ROLES": [], "CLOTHING": [], "PHYS_ATTR": [], "OBJECTS": [], "ENVIRONMENTS": [],
+        "TIME_OF_DAY": [], "WEATHER": [], "LIGHTING": [], "COLORS": [], "CAMERA": [],
+        "COMPOSITION": [], "MOOD": [], "STYLE": [], "QUALITY": [], "EFFECTS": []
+    },
+    "The Clockwork Alchemist": {
+        "CHAR_ROLES": ["alchemist","mechanist","guildmaster","automaton","clockmaker","airship captain","apprentice"],
+        "CLOTHING": ["brass goggles","mechanical gauntlet","leather harness","tattered coat","oil-stained gloves","clockwork prosthetic"],
+        "PHYS_ATTR": ["soot-smudged","grease-streaked","silver hair","sharp eyes"],
+        "OBJECTS": ["brass pocketwatch","ether vial","alchemical sigil","rune plate","spring coil","pressure gauge","gearwork heart","steam valve","arc lamp"],
+        "ENVIRONMENTS": ["clockwork workshop","gilded laboratory","observatory tower","airship deck","steamworks","gear hall","cobblestone alley","ruined cathedral","boiler room"],
+        "TIME_OF_DAY": ["gaslamp night","dawn fog"],
+        "WEATHER": ["sooty haze","steam plume","industrial fog"],
+        "LIGHTING": ["lantern glow","arc light","flicker light","volumetric steam light"],
+        "COLORS": ["brass","copper","verdigris","oil-sheen"],
+        "CAMERA": ["close-up","mid-shot","wide shot","low angle","high angle","over-the-shoulder","dutch angle"],
+        "COMPOSITION": ["foreground gears","backlit silhouette","leading lines of pipes"],
+        "MOOD": ["tense","mysterious","epic","melancholic","triumphant"],
+        "STYLE": ["steampunk","anime","cinematic"],
+        "QUALITY": ["highly detailed","crisp lines","4k","dramatic shadows"],
+        "EFFECTS": ["sparks","embers","steam","dust motes"]
+    },
+    "Neon Sci-Fi / Cyberpunk": {
+        "CHAR_ROLES": ["netrunner","android","street samurai","corporate agent","hacker","detective"],
+        "CLOTHING": ["neon jacket","visored helmet","techwear cloak","fiber-optic hair","chrome prosthetic"],
+        "PHYS_ATTR": ["augmented eyes","cybernetic arm","holographic tattoos"],
+        "OBJECTS": ["neon katana","data shard","holo-screen","drone","plasma pistol","aug rig"],
+        "ENVIRONMENTS": ["rain-soaked alley","rooftop skyline","arcology lobby","night market","megacity block"],
+        "TIME_OF_DAY": ["night","dawn"],
+        "WEATHER": ["rain","mist","smog"],
+        "LIGHTING": ["neon glow","backlit signage","hologram spill"],
+        "COLORS": ["magenta","cyan","electric blue","acid green"],
+        "CAMERA": ["low angle","wide shot","over-the-shoulder","close-up"],
+        "COMPOSITION": ["reflections in puddles","crowded background","silhouette in signage"],
+        "MOOD": ["tense","noir","rebellious","grim"],
+        "STYLE": ["cyberpunk","anime","cinematic"],
+        "QUALITY": ["highly detailed","hdr","crisp lines"],
+        "EFFECTS": ["rain droplets","steam","glitches","lens flare"]
+    },
+    "Medieval High Fantasy": {
+        "CHAR_ROLES": ["knight","sorceress","ranger","bard","cleric","dragon","queen","king","orc","elf"],
+        "CLOTHING": ["plate armor","chainmail","tabard","hooded cloak","wizard robe","leather boots"],
+        "PHYS_ATTR": ["pointed ears","scarred","braided hair","emerald eyes"],
+        "OBJECTS": ["longsword","spellbook","crystal staff","enchanted bow","shield","chalice"],
+        "ENVIRONMENTS": ["castle hall","enchanted forest","mountain pass","ancient ruins","village square"],
+        "TIME_OF_DAY": ["dawn","sunset","night"],
+        "WEATHER": ["fog","snow","storm"],
+        "LIGHTING": ["torchlight","moonlight","sunbeams","god rays"],
+        "COLORS": ["emerald","gold","crimson","sapphire"],
+        "CAMERA": ["establishing shot","low angle","wide shot","close-up"],
+        "COMPOSITION": ["leading lines","foreground foliage","backlit silhouette"],
+        "MOOD": ["epic","mystical","hopeful","ominous"],
+        "STYLE": ["anime","painterly","cinematic"],
+        "QUALITY": ["highly detailed","4k","dramatic shadows"],
+        "EFFECTS": ["embers","dust motes","sparkles","magic particles"]
+    },
+    "Gothic Horror": {
+        "CHAR_ROLES": ["vampire","occultist","nun","priest","monster hunter","ghost"],
+        "CLOTHING": ["victorian dress","tailcoat","veil","leather gloves","fetters"],
+        "PHYS_ATTR": ["pale skin","bloodshot eyes","gaunt","fangs"],
+        "OBJECTS": ["candle","crucifix","silver dagger","coffin","grimoire"],
+        "ENVIRONMENTS": ["ruined chapel","graveyard","crypt","foggy street","abandoned manor"],
+        "TIME_OF_DAY": ["midnight","dusk"],
+        "WEATHER": ["fog","rain","storm"],
+        "LIGHTING": ["candlelight","moonlight","low key","hard shadows"],
+        "COLORS": ["sepia","scarlet","ashen blue","black"],
+        "CAMERA": ["dutch angle","close-up","high angle","long shot"],
+        "COMPOSITION": ["heavy vignette","negative space","arched frames"],
+        "MOOD": ["ominous","mournful","tense","macabre"],
+        "STYLE": ["noir","painterly","cinematic"],
+        "QUALITY": ["highly detailed","grain","dramatic shadows"],
+        "EFFECTS": ["mist","motes","blood spatter"]
+    },
+    "Space Opera": {
+        "CHAR_ROLES": ["pilot","admiral","smuggler","alien envoy","trooper","astromech"],
+        "CLOTHING": ["flight suit","cape","armor plating","vac suit"],
+        "PHYS_ATTR": ["glowing eyes","bioluminescent skin","horns","tendrils"],
+        "OBJECTS": ["blaster","holomap","starfighter","hyperdrive core","laser sword"],
+        "ENVIRONMENTS": ["starship bridge","hangar bay","desert planet","ice moon","asteroid base"],
+        "TIME_OF_DAY": ["night","dawn"],
+        "WEATHER": ["solar wind","dust storm","snow"],
+        "LIGHTING": ["console glow","starlight","volumetric beams"],
+        "COLORS": ["azure","violet","burnt orange","silver"],
+        "CAMERA": ["wide shot","over-the-shoulder","top-down","low angle"],
+        "COMPOSITION": ["rule of thirds","epic scale","foreground cockpit"],
+        "MOOD": ["heroic","urgent","mysterious"],
+        "STYLE": ["cinematic","anime","illustration"],
+        "QUALITY": ["hdr","highly detailed","4k"],
+        "EFFECTS": ["sparks","debris","engine trails","laser bolts"]
+    },
+    "Noir Detective": {
+        "CHAR_ROLES": ["detective","femme fatale","mobster","cop","bartender"],
+        "CLOTHING": ["trench coat","fedora","three-piece suit","evening gown","gloves"],
+        "PHYS_ATTR": ["cigarette smoke","stubbled chin","shadowed eyes"],
+        "OBJECTS": ["revolver","briefcase","whisky glass","matchbook","photograph"],
+        "ENVIRONMENTS": ["rainy street","jazz club","motel room","police station","office with blinds"],
+        "TIME_OF_DAY": ["night","late evening"],
+        "WEATHER": ["rain","fog"],
+        "LIGHTING": ["venetian blind light","low key","hard contrast","neon sign"],
+        "COLORS": ["monochrome","sepia","scarlet accent"],
+        "CAMERA": ["close-up","low angle","over-the-shoulder"],
+        "COMPOSITION": ["silhouette","strong diagonals","negative space"],
+        "MOOD": ["noir","tense","melancholic"],
+        "STYLE": ["black and white","cinematic","pulp illustration"],
+        "QUALITY": ["grain","high contrast","sharp focus"],
+        "EFFECTS": ["rain droplets","cigarette smoke"]
+    },
+    "Modern Romance / Slice of Life": {
+        "CHAR_ROLES": ["student","teacher","office worker","musician","photographer"],
+        "CLOTHING": ["casual wear","school uniform","sundress","suit and tie","hoodie"],
+        "OBJECTS": ["smartphone","coffee cup","notebook","flowers","guitar"],
+        "ENVIRONMENTS": ["café","apartment balcony","park bench","train station","beach at sunset"],
+        "LIGHTING": ["soft daylight","golden hour","warm lamp glow","neon reflections"],
+        "MOOD": ["warm","tender","nostalgic","bittersweet"]
+    },
+    "Post-Apocalyptic Survival": {
+        "CHAR_ROLES": ["scavenger","wanderer","raider","survivor","mutant"],
+        "CLOTHING": ["patched leather","gas mask","tattered cloak","survival gear"],
+        "OBJECTS": ["crossbow","makeshift weapon","rusty car","canned food","broken radio"],
+        "ENVIRONMENTS": ["ruined city","desert wasteland","abandoned mall","collapsed highway","underground bunker"],
+        "LIGHTING": ["dusty sunlight","flickering torch","smoke haze"],
+        "MOOD": ["grim","hopeless","desperate","tense"]
+    },
+    "Mythic Africa": {
+        "CHAR_ROLES": ["griot","warrior queen","rain shaman","hunter","ancestor spirit"],
+        "CLOTHING": ["tribal beads","kente cloth","ceremonial masks","painted skin"],
+        "OBJECTS": ["drum","spear","calabash","ritual staff","amulet"],
+        "ENVIRONMENTS": ["savannah","baobab grove","sacred river","desert dunes","ancestral shrine"],
+        "LIGHTING": ["blazing sun","firelight","moonlit ritual glow"],
+        "MOOD": ["spiritual","majestic","solemn","powerful"]
+    },
+    "Arabian Nights Fantasy": {
+        "CHAR_ROLES": ["sultan","desert thief","genie","merchant","caravan guard"],
+        "CLOTHING": ["turbans","flowing robes","veils","gold jewelry","sandals"],
+        "OBJECTS": ["magic lamp","scimitar","carpets","spice jars","treasure chest"],
+        "ENVIRONMENTS": ["desert oasis","palace hall","bazaar","caravan camp","hidden cave"],
+        "LIGHTING": ["torchlight","golden sunset","starlit desert sky"],
+        "MOOD": ["exotic","mysterious","enchanting","adventurous"]
+    },
+    "Far East Mythology": {
+        "CHAR_ROLES": ["samurai","onmyoji","yokai","dragon spirit","shrine maiden"],
+        "CLOTHING": ["kimono","hakama","straw hat","bamboo armor"],
+        "OBJECTS": ["katana","torii gate","scrolls","shrine lanterns","fans"],
+        "ENVIRONMENTS": ["bamboo forest","mountain shrine","misty lake","torii pathway","ancient village"],
+        "LIGHTING": ["moonlight","lantern glow","misty dawn"],
+        "MOOD": ["serene","spiritual","mystical","foreboding"]
+    },
+    "Prehistoric Adventure": {
+        "CHAR_ROLES": ["hunter-gatherer","tribal elder","cave child","shaman"],
+        "CLOTHING": ["furs","bones","painted skin","animal hides"],
+        "OBJECTS": ["stone spear","fire torch","cave paintings","drums"],
+        "ENVIRONMENTS": ["caves","volcanic plains","mammoth herd","river crossing","dense jungle"],
+        "LIGHTING": ["firelight","dawn mist","volcanic glow"],
+        "MOOD": ["primal","dangerous","awe-inspiring"]
+    },
+    "Western Frontier": {
+        "CHAR_ROLES": ["cowboy","sheriff","outlaw","rancher","gambler"],
+        "CLOTHING": ["wide-brimmed hat","poncho","boots with spurs","leather vest"],
+        "OBJECTS": ["revolver","lasso","whiskey bottle","deck of cards","horses"],
+        "ENVIRONMENTS": ["dusty town","saloon","desert canyon","train station","ranch"],
+        "LIGHTING": ["blazing noon sun","sunset silhouette","lantern light"],
+        "MOOD": ["gritty","tense","adventurous","lawless"]
+    }
+}
+
+# -----------------------------
+# STYLE PRESETS
+# -----------------------------
+STYLE_PRESETS = {
+    "Motion Graphics Anime": "anime style, clean lines, vibrant colors, cinematic lighting",
+    "Cel-Shaded": "cel shading, bold outlines, flat colors",
+    "Realistic Cinematic": "photorealistic, 35mm film look, dramatic lighting",
+    "Shōnen Action Anime": "dynamic poses, speedlines, exaggerated expressions, vivid tones",
+    "Studio Ghibli Soft Style": "painterly, warm colors, lush backgrounds, whimsical atmosphere",
+    "Manga Black & White": "inked, screentones, stark contrast, monochrome",
+    "Watercolor Illustration": "soft brush strokes, pastel tones, handmade look",
+    "Film Noir Cinematic": "black and white, hard shadows, venetian blind light",
+    "Ultra-Realistic 3D Render": "raytraced lighting, hyper-detailed textures, photoreal",
+    "Epic Fantasy Painting": "oil painting style, textured brush, glowing godrays",
+    "Dark Fantasy Horror": "gothic, gritty, muted tones, ominous atmosphere",
+    "Mythic African Epic": "bold colors, tribal patterns, spiritual glow",
+    "Cyberpunk Neon": "neon-lit, rain soaked, holograms, futuristic vibe",
+    "Retro Sci-Fi Pulp": "1950s pulp magazine style, halftones, bright flat colors",
+    "Synthwave Vaporwave": "neon pinks, purples, gridlines, surreal dreamlike glow",
+    "Steampunk Illustration": "sepia tones, brass, gears, Victorian industrial style",
+    "Dieselpunk Grit": "smoky, muted palette, retro machinery, 1940s vibe",
+    "Pop Art Comic": "bold outlines, halftone dots, primary colors",
+    "Surrealist Dreamscape": "distorted perspectives, floating objects, dreamlike light"
+}
+
+# -----------------------------
+# UI
+# -----------------------------
+col1, col2 = st.columns(2)
+with col1:
+    pack = st.selectbox("Story Pack", list(STORY_PACKS.keys()), index=0)
+with col2:
+    preset = st.selectbox("Style Preset", list(STYLE_PRESETS.keys()), index=0)
+
+with st.expander("Add a custom Story Pack (optional)"):
+    st.write("Upload a JSON file or paste JSON defining extra vocabulary. It merges with the chosen pack.")
+    up = st.file_uploader("Upload JSON", type=["json"], accept_multiple_files=False)
+    pasted = st.text_area("Or paste JSON here", height=140,
+                          placeholder='{"OBJECTS": ["new prop"], "ENVIRONMENTS": ["new place"]}')
+    custom_pack = {}
+    if up is not None:
+        try:
+            custom_pack = json.load(up)
+            st.success("Custom pack loaded from file.")
+        except Exception as e:
+            st.error(f"Failed to parse uploaded JSON: {e}")
+    elif pasted.strip():
+        try:
+            custom_pack = json.loads(pasted)
+            st.success("Custom pack parsed.")
+        except Exception as e:
+            st.error(f"Failed to parse pasted JSON: {e}")
+
+input_text = st.text_area("Paste your scene / description", height=200,
+                          placeholder="Describe the scene you want Kling to render...")
+
+if st.button("✨ Perfect my prompt"):
+    chosen_pack = STORY_PACKS[pack].copy()
+    if isinstance(custom_pack, dict):
+        for k, v in custom_pack.items():
+            if k in chosen_pack:
+                chosen_pack[k].extend(v)
+            else:
+                chosen_pack[k] = v
+
+    words = re.findall(r"\w[\w-]*", input_text.lower())
+    categories = {k: [] for k in chosen_pack}
+    for w in words:
+        for cat, terms in chosen_pack.items():
+            if w in [t.lower() for t in terms]:
+                categories[cat].append(w)
+
+    st.subheader("Perfected Prompt")
+    prompt = f"{input_text}\nStyle: {STYLE_PRESETS[preset]}"
+    for cat, vals in categories.items():
+        if vals:
+            prompt += f"\n{cat.title()}: {', '.join(vals)}"
+    st.code(prompt, language="markdown")
+
+    st.download_button("⬇️ Download Prompt", prompt, file_name="perfected_prompt.txt")
